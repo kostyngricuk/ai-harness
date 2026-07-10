@@ -56,8 +56,8 @@ already collected its merged Dev work.
 
 6. **Push** the release branch: `git push -u origin release/<new-version>`.
 
-7. **Open the PR into the default branch** with the GitHub MCP `create_pull_request` tool
-   (`base: {{DEFAULT_BRANCH}}`, `head: release/<new-version>`). The body must include:
+7. **Open the PR into the default branch** with the GitHub CLI
+   (`gh pr create --base {{DEFAULT_BRANCH}} --head release/<new-version> --title … --body …`). The body must include:
    - the **version**,
    - the list of included **ticket IDs** with their Linear links and titles,
    - any **conflicted/skipped** tasks from step 4,

@@ -63,7 +63,8 @@ Periodically (or when asked) review issues in status **TODO**:
 3. If something is **missing from the docs**, capture it: use the **git-flow** skill to create
    a `task/{TICKET-ID}` branch in the **docs repo** (`{{DOCS_REPO}}`), update the relevant docs with
    the new/clarified requirements, commit (`docs({TICKET-ID}): …`, no author trailer), and open a
-   PR into the docs repo's **`release`** branch via the GitHub MCP `create_pull_request` tool. Link
+   PR into the docs repo's **`release`** branch with the GitHub CLI
+   (`gh pr create --base release --head task/{TICKET-ID} --title … --body …`). Link
    the PR in a Linear comment.
 
 ## Docs maintenance

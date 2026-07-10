@@ -84,7 +84,7 @@ not paperwork:
 5. Before opening the PR, run the quality gate in `{{CODE_PATH}}`:
    `{{QUALITY_GATE}}`. Fix anything you broke.
 6. Commit (`{type}({SUBTASK-ID}): short description`, **no author trailer**), push, and open a PR
-   with the GitHub MCP `create_pull_request` tool (`base: task/{PARENT-ID}`, `head: {your-branch}`)
+   with the GitHub CLI (`gh pr create --base task/{PARENT-ID} --head {your-branch} --title … --body …`)
    — the base is the **parent's** task branch, never `task/{SUBTASK-ID}`. Link the Linear issue in
    the body.
 7. **Set the subtask to status `In Review`** (transition from `In Progress` — do not skip).
@@ -100,12 +100,12 @@ not paperwork:
 8. **Request the Lead's review by spawning the `Lead` subagent** (Agent tool,
    `subagent_type: Lead`). Pass it the **PR link**, **branch name**, and **subtask ID**, and ask it
    to review the PR and post its comments there.
-9. **Read the Lead's PR comments** (GitHub MCP `get_pull_request_comments` /
-   `get_pull_request_reviews`). Implement every requested
+9. **Read the Lead's PR comments** (`gh pr view <PR> --comments`; reviews via
+   `gh api repos/{owner}/{repo}/pulls/{PR}/reviews`). Implement every requested
    change, re-run the quality gate (`{{QUALITY_GATE}}`), commit, and push.
    Repeat the spawn→address loop until the Lead approves with no remaining change requests.
-10. **Merge the PR into the parent's `task/{PARENT-ID}` branch** yourself (GitHub MCP
-    `merge_pull_request`, `merge_method: merge`, base `task/{PARENT-ID}`). Never merge into a
+10. **Merge the PR into the parent's `task/{PARENT-ID}` branch** yourself (`gh pr merge <PR>
+    --merge`; the PR base is `task/{PARENT-ID}`). Never merge into a
     `task/{SUBTASK-ID}` branch, and never into `{{DEFAULT_BRANCH}}`.
 11. **Set the subtask to status `Done`** (transition from `In Review`). Then **post a mandatory
     closing Linear comment** on the subtask noting: the PR(s) **merged into `task/{PARENT-ID}`**, the

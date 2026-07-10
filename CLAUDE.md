@@ -93,4 +93,6 @@ harness repo.
   Never force-push it.
 - Shared state across agents is **Linear** (status / labels / comments) and **GitHub**.
   Resolve Linear status/label **names** dynamically — IDs differ per workspace.
+- **Use the GitHub CLI (`gh`) for all GitHub operations** (PRs, reviews, merges, queries) — not a
+  GitHub MCP server. Linear still uses its MCP tools.
 - Follow the **git-flow** skill for all branches, commits, and PRs.

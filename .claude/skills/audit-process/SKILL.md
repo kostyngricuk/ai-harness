@@ -8,7 +8,7 @@ description: Verify an agent actually followed the process before trusting its "
 A gate that runs **whenever an agent claims it finished work**. Agents over-report — they
 claim statuses, comments, PRs, and merges they never actually made (see the orchestration
 memory). This skill **trusts nothing the agent said**: it re-derives the truth from Linear
-(MCP) and GitHub (the **GitHub MCP** server / `git`), checks it against the rule for the issue's **current
+(MCP) and GitHub (the **GitHub CLI** `gh` / `git`), checks it against the rule for the issue's **current
 status**, and returns a clear **PASS** or a list of **violations** with *who must redo what*.
 
 Linear ticket prefix is **{{TICKET_PREFIX}}**. Branch/PR conventions come from **git-flow**. This skill is
@@ -41,7 +41,7 @@ its family.
    exists* and the PR *actually exists / is in the claimed state*:
    - parent → `git ls-remote --heads origin task/{PARENT-ID}`
    - subtask → its dev branch `{type}/{SUBTASK-ID}-…` (find with `git ls-remote --heads origin | grep {SUBTASK-ID}`)
-   - PRs → GitHub MCP `list_pull_requests` (search by `{TICKET-ID}`) / `get_pull_request` (read its `state`, base, head, `merged`/`mergedAt`, and reviews)
+   - PRs → GitHub CLI `gh pr list --search {TICKET-ID}` / `gh pr view <PR>` (read its `state`, base, head, `merged`/`mergedAt`, and reviews)
 3. Only after you have the real data, apply the status rule below.
 
 ## Status rules — what must be true
@@ -55,10 +55,10 @@ the **owner** who must redo it if the evidence is missing or inconsistent.
 | **Backlog** | Description contains a real **business** description of the task/problem (not technical, not empty). | Linear description | BA |
 | **TODO** | Issue is **split into Dev subtasks**; **each** subtask has a **technical implementation description** and is itself in **TODO**. A main issue with no subtasks in TODO is a violation. | Linear children + their descriptions/statuses | Lead |
 | **In Progress** | A **Dev** agent has started. If **≥1 child subtask** is In Progress, the **parent** (business-reqs) issue must **also** be In Progress. | Linear children vs. parent status | Dev |
-| **In Review** | Each relevant **subtask** has a Linear **comment containing the PR link AND the branch name**, and that PR/branch **actually exists** on GitHub. If **all** children are In Review, the **parent** must be In Review too. | Linear comments + GitHub MCP `get_pull_request` / `git ls-remote` | Dev posts · **Lead** checks |
-| **In QA** | Each merged subtask has a **Lead comment** stating the **PR was approved and merged** into the parent branch (`task/{PARENT-ID}`); each such subtask is **Done**; the merge is real on GitHub (PR `mergedAt` set, base = `task/{PARENT-ID}`). Parent reaches In QA only when **all** subtasks are Done. | Linear comments + statuses + GitHub MCP `get_pull_request` (`merged`, base) | Lead |
-| **RC** | The **parent** issue has a comment about the **release branch** with a **link to the release-branch → {{DEFAULT_BRANCH}} PR**, and that `release/*` branch + PR exist. | Linear parent comment + GitHub MCP `get_pull_request` | Lead / release |
-| **Done** | The **release PR is merged** (`release/* → {{DEFAULT_BRANCH}}` `mergedAt` set). Parent flips to Done only after that merge. | GitHub MCP `get_pull_request` (`merged`, base) | release / human |
+| **In Review** | Each relevant **subtask** has a Linear **comment containing the PR link AND the branch name**, and that PR/branch **actually exists** on GitHub. If **all** children are In Review, the **parent** must be In Review too. | Linear comments + GitHub CLI `gh pr view` / `git ls-remote` | Dev posts · **Lead** checks |
+| **In QA** | Each merged subtask has a **Lead comment** stating the **PR was approved and merged** into the parent branch (`task/{PARENT-ID}`); each such subtask is **Done**; the merge is real on GitHub (PR `mergedAt` set, base = `task/{PARENT-ID}`). Parent reaches In QA only when **all** subtasks are Done. | Linear comments + statuses + GitHub CLI `gh pr view` (`merged`, base) | Lead |
+| **RC** | The **parent** issue has a comment about the **release branch** with a **link to the release-branch → {{DEFAULT_BRANCH}} PR**, and that `release/*` branch + PR exist. | Linear parent comment + GitHub CLI `gh pr view` | Lead / release |
+| **Done** | The **release PR is merged** (`release/* → {{DEFAULT_BRANCH}}` `mergedAt` set). Parent flips to Done only after that merge. | GitHub CLI `gh pr view` (`merged`, base) | release / human |
 
 ## Structural rules — always check, regardless of status
 
@@ -94,7 +94,7 @@ point of the gate. Do **not** soften it, and do **not** fix it yourself by editi
 - **Read-only.** Never change a Linear status/comment or touch a branch/PR to "fix" a finding —
   report it so the owning agent redoes it.
 - **Trust evidence, not claims.** An agent saying "I set it to In Review and commented the PR" is
-  not proof — open the issue, read the comment, and fetch the PR via GitHub MCP `get_pull_request`. Per the orchestration
+  not proof — open the issue, read the comment, and fetch the PR via GitHub CLI `gh pr view`. Per the orchestration
   memory, Dev subagents in this harness routinely *claim* Linear updates they never made.
 - Resolve all status/label **names** dynamically (IDs differ per workspace).
 - If the audited issue's status doesn't match *any* expected shape (e.g. In Progress but no Dev

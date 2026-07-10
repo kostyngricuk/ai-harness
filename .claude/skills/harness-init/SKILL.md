@@ -59,7 +59,7 @@ discovered** without the human, do that instead of guessing — via CLI or the c
 - `TICKET_PREFIX` — confirm against Linear (`list_teams` → the team's key is the prefix; sample an
   issue to see the `KEY-123` identifier). Don't ship a guessed prefix.
 - `DEFAULT_BRANCH` — read it from the repo: `git -C "$CODE_PATH" symbolic-ref --short refs/remotes/origin/HEAD`
-  (or GitHub MCP). Default `master` only if that's inconclusive; confirm `main` vs `master`.
+  (or `gh repo view --json defaultBranchRef`). Default `master` only if that's inconclusive; confirm `main` vs `master`.
 - `DOCS_REPO` / `CODE_REPO` — full remote URLs; cross-check against the actual `origin` of the
   sibling checkouts (Step 3a) so the URL you record is the real one.
 

@@ -7,7 +7,7 @@ description: Branch, commit, and PR rules for the three-branch model (default br
 
 The repos use **three branch types**: `{{DEFAULT_BRANCH}}`, `release/*`, `task/*`, plus
 short-lived dev/subtask branches. Branches, commits, and merges use local `git`; pull requests are
-created and managed through the **GitHub MCP** server. There are two repos that mirror this model:
+created and managed with the **GitHub CLI** (`gh`). There are two repos that mirror this model:
 the app code repo (`{{CODE_REPO}}`) and
 the docs repo (`{{DOCS_REPO}}`). Linear ticket prefix is **{{TICKET_PREFIX}}**.
 
@@ -43,7 +43,7 @@ the docs repo (`{{DOCS_REPO}}`). Linear ticket prefix is **{{TICKET_PREFIX}}**.
 | `task/{PARENT-ID}` | latest unpublished `release/<x.y.z>` | **human** (on Done) | **human** (publish) |
 | `release/<x.y.z>` | `{{DEFAULT_BRANCH}}` | **human** (release step) | **human** (publish) |
 
-- Open PRs with the GitHub MCP `create_pull_request` tool (`base: <target>`, `head: <branch>`);
+- Open PRs with the GitHub CLI (`gh pr create --base <target> --head <branch> --title … --body …`);
   include the ticket id and a link back to the Linear issue in the PR body.
 - If a merge cannot be done cleanly, open a PR and leave comments to help resolve the
   conflicts — do not force a local conflict resolution silently.

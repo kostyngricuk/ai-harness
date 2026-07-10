@@ -50,10 +50,10 @@ subtask ID.
    Dev's workflow). If the work was never split into a subtask, or the status/PR-link comment is
    missing, **do not silently proceed** — split it / flag it back to Dev or the orchestrator first.
    Progress belongs on the subtask, never the main issue.
-2. Read the PR diff (GitHub MCP `get_pull_request` / `get_pull_request_diff`) and the linked
+2. Read the PR diff (`gh pr view <PR>` / `gh pr diff <PR>`) and the linked
    subtask plan.
-3. Leave review comments **on the PR** via the GitHub MCP `create_and_submit_pull_request_review`
-   tool — request changes or approve.
+3. Leave review comments **on the PR** with the GitHub CLI (`gh pr review <PR> --approve` or
+   `gh pr review <PR> --request-changes --body "…"`) — request changes or approve.
 4. **Record the verdict in Linear on the subtask** (mandatory): post a comment with
    `mcp__plugin_linear_linear__save_comment` on the **subtask** (`issueId`) stating
    **APPROVED** or **CHANGES REQUESTED**, the **PR link**, and a one-line summary (for changes
