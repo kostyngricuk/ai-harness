@@ -1,0 +1,8 @@
+# General
+.DS_Store
+Makefile
+
+# AI files
+.claude/*
+!.claude/skills
+!.claude/agents
