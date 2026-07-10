@@ -1,52 +1,70 @@
 ---
 name: harness-init
-description: Initialize this reusable AI harness for a specific project — collect the project facts, auto-detect the code/build settings from the app checkout, and replace every {{TOKEN}} placeholder across CLAUDE.md, the agents, and the skills. Use once, right after dropping the harness into a new project (or when re-pointing it at a different project).
+description: Initialize this reusable AI harness for a specific project — collect the project facts, auto-detect the code/build settings from the app checkout, and write the two config files (`.claude/harness.env` + `CLAUDE.local.md`) that every {{TOKEN}} resolves against. Use once, right after dropping the harness into a new project (or when re-pointing it at a different project).
 ---
 
 # AI Harness — Init
 
 One-time setup that turns the generic template into a project-specific harness. You **collect the
 project facts** from the human, **auto-detect the code/build settings** by analyzing the app
-checkout, then **replace every `{{TOKEN}}` placeholder** across `CLAUDE.md`, `.claude/agents/*.md`,
-and `.claude/skills/**/SKILL.md` with the real values.
+checkout, then **write the two per-project config files**:
+
+- **`.claude/harness.env`** — the three simple scalars (`PROJECT_NAME`, `TICKET_PREFIX`,
+  `DEFAULT_BRANCH`) as environment variables, sourced before every run.
+- **`CLAUDE.local.md`** — everything else (repos, code paths, version-file **path**, quality gate,
+  and any other fact a skill/agent needs) as **free-form**, auto-loaded local context. No `.example`
+  template — it's generated per project and the user can extend it later.
+
+The `{{TOKEN}}` placeholders in `CLAUDE.md`, `.claude/agents/*.md`, and `.claude/skills/**/SKILL.md`
+are **left in place**; each resolves at runtime to the env var of the same name (harness.env) or to
+the fact recorded in `CLAUDE.local.md`. You never edit the instruction files — only these two config
+files change per project.
 
 Documentation and application code are **never copied into this repo** — they stay in their own
 remote repos and are only referenced by the config.
 
-## Step 1 — Read the token list
+## Step 1 — Discover what the harness needs
 
-Read the **Project Configuration** table in `CLAUDE.md` — it is the single source of truth for
-which tokens exist. Tokens fall into two groups:
+Do **not** work from a hard-coded token list — derive it from the actual agents and skills so the
+config always matches what they consume. Enumerate every `{{TOKEN}}` they reference:
 
-**Project facts — ask the human:**
+```bash
+grep -rhoE '\{\{[A-Z_]+\}\}' CLAUDE.md .claude/agents .claude/skills | sort -u
+```
 
-| Token | Meaning |
-|-------|---------|
-| `{{PROJECT_NAME}}` | Human-readable project name |
-| `{{TICKET_PREFIX}}` | Linear ticket prefix / team key (e.g. `ABC` → `ABC-123`) |
-| `{{DEFAULT_BRANCH}}` | Protected release branch (`master` or `main`) |
-| `{{DOCS_REPO}}` | Remote docs / requirements repo (referenced, never stored here) |
-| `{{CODE_REPO}}` | Remote application code repo(s) |
+Ignore the literal `{{TOKEN}}` (a documentation placeholder). Then **read the files that use each
+token** to understand what value it actually needs and where it's used — a token in a `git`/branch
+command needs a shell scalar; a token naming a repo or path needs a concrete URL/path; a skill may
+also imply project facts beyond the tokens (e.g. Linear workspace, label names, a package manager).
+Note anything a skill needs that isn't yet a token — you'll record it in `CLAUDE.local.md` too.
 
-**Code/build facts — auto-detect from the app checkout (do NOT ask):**
+Sort each needed value into how you'll get it and where it goes:
 
-| Token | Meaning |
-|-------|---------|
-| `{{CODE_PATH}}` | Local path where the app code is checked out |
-| `{{VERSION_FILE}}` | File that carries the release version (e.g. `package.json`) |
-| `{{QUALITY_GATE}}` | Pre-PR quality command |
+| How to get it | Goes to |
+|---------------|---------|
+| **Ask the human** — `PROJECT_NAME`, `TICKET_PREFIX`, `DEFAULT_BRANCH` (scalars) | `harness.env` |
+| **Ask the human** — `DOCS_REPO`, `CODE_REPO` (repo URLs) | `CLAUDE.local.md` |
+| **Auto-detect** from the checkout — `CODE_PATH`, `VERSION_FILE` (path only), `QUALITY_GATE` | `CLAUDE.local.md` |
+| **Verify/enrich** via MCP or CLI — Linear team key, GitHub default branch, etc. | (confirms the above) |
 
-If the table in `CLAUDE.md` has changed, use whatever it lists — do not hard-code this copy.
+Only `PROJECT_NAME`, `TICKET_PREFIX`, `DEFAULT_BRANCH` are env scalars in `harness.env`; everything
+else is free-form context in `CLAUDE.local.md`.
 
-## Step 2 — Collect the project facts (ask the human)
+## Step 2 — Collect the project facts (ask + verify)
 
 Use anything the human already gave you; **ask for the rest** (prefer the AskUserQuestion tool, one
-concise question per missing token, with sensible defaults):
+concise question per missing value, with sensible defaults). Where a value can be **verified or
+discovered** without the human, do that instead of guessing — via CLI or the connected MCPs:
 
-- `DEFAULT_BRANCH` — default `master` unless the repo uses `main`.
-- `DOCS_REPO` / `CODE_REPO` — full remote URLs (e.g. `https://github.com/org/repo`).
+- `TICKET_PREFIX` — confirm against Linear (`list_teams` → the team's key is the prefix; sample an
+  issue to see the `KEY-123` identifier). Don't ship a guessed prefix.
+- `DEFAULT_BRANCH` — read it from the repo: `git -C "$CODE_PATH" symbolic-ref --short refs/remotes/origin/HEAD`
+  (or GitHub MCP). Default `master` only if that's inconclusive; confirm `main` vs `master`.
+- `DOCS_REPO` / `CODE_REPO` — full remote URLs; cross-check against the actual `origin` of the
+  sibling checkouts (Step 3a) so the URL you record is the real one.
 
-Do **not** guess business-critical values silently.
+Ask the human only for what genuinely can't be discovered (e.g. which repo is *docs* vs *code*, the
+human-readable `PROJECT_NAME`). Do **not** guess business-critical values silently.
 
 ## Step 3 — Auto-detect the code/build facts (analyze the app checkout)
 
@@ -69,11 +87,11 @@ done
 `CODE_PATH` = the absolute path of the checkout whose origin matches `CODE_REPO` (use `pwd` inside
 it to capture it exactly). If no sibling matches, ask the human where the app is checked out.
 
-### 3b. Detect the version file + current version → `VERSION_FILE`
+### 3b. Detect the version file **path** → `VERSION_FILE`
 
-Probe the checkout for its ecosystem's manifest and read the current version. Record the version
-**file** (relative to the app repo), the **current version**, and **how to bump it** — `cut-release`
-uses all three.
+Find *which* file carries the release version and record its **path only** — do **not** capture the
+current version number. Versions go stale; `cut-release` reads the file live when it needs the value.
+Also note the field/bump method (a stable fact, not a value), which stays useful across releases.
 
 | Ecosystem | Version file | Version field | Bump |
 |---|---|---|---|
@@ -88,11 +106,11 @@ uses all three.
 ```bash
 cd "$CODE_PATH"
 ls package.json pyproject.toml Cargo.toml pom.xml build.gradle* pubspec.yaml VERSION 2>/dev/null
-[ -f package.json ] && node -p "require('./package.json').version" 2>/dev/null
 ```
 
-If no version file exists, set `VERSION_FILE` to `TBD` and tell the human the project has no version
-to bump yet.
+Record `VERSION_FILE` as an absolute path (or a path relative to `CODE_PATH`) so the agent can read
+it later. If no version file exists, set `VERSION_FILE` to `TBD` and tell the human the project has
+no version to bump yet.
 
 ### 3c. Detect the quality gate → `QUALITY_GATE`
 
@@ -117,49 +135,83 @@ cd "$CODE_PATH"
 
 ### 3d. Multiple apps
 
-If `CODE_REPO` names more than one app, run 3a–3c for **each** and record a value per app. Fill the
-tokens with the **primary** app, and in `CLAUDE.md` note the extra apps' paths, version files, and
-gates below the config table so Dev/cut-release can find them.
+If `CODE_REPO` names more than one app, run 3a–3c for **each** and record a value per app. Treat the
+**primary** app as the default (`CODE_PATH`, `VERSION_FILE`, `QUALITY_GATE`), and give each extra app
+its own clearly-labelled section in `CLAUDE.local.md` so Dev/cut-release can find them.
 
 ## Step 4 — Confirm
 
 Echo the full token → value mapping back to the human as a table — clearly marking which values you
 **detected** vs. which you were **given** — and get a **yes** before writing. Call out anything set
-to `TBD` or anything you had to guess. This edit touches every instruction file, so confirm first.
+to `TBD` or anything you had to guess.
 
-## Step 5 — Apply
+## Step 5 — Apply (write the two config files)
 
-For **each** token, replace **all** occurrences of the literal `{{TOKEN}}` with its value across:
+Write `.claude/harness.env` and `CLAUDE.local.md`; **do not** edit `CLAUDE.md`, the agents, or the
+skills — their `{{TOKEN}}` placeholders stay put and resolve against these files at runtime.
 
-- `CLAUDE.md`
-- `.claude/agents/*.md`
-- `.claude/skills/**/SKILL.md` (including this file's siblings; you may leave *this* file as-is)
+**`.claude/harness.env`** — copy `.claude/harness.env.example`, then set the three scalars. The env
+var name is the token name without the braces (`{{TICKET_PREFIX}}` → `TICKET_PREFIX="KRAF"`); quote
+values.
 
-Prefer an explicit, reviewable pass (Edit with `replace_all`, or `grep -rl '{{TOKEN}}'` then edit
-each file). After the replacement, the **Project Configuration** table in `CLAUDE.md` becomes a
-filled-in record of the chosen values — that is expected. Also record the detected **current
-version** and **bump method** as a note under that table (for `cut-release`).
+```
+PROJECT_NAME="…"
+TICKET_PREFIX="…"
+DEFAULT_BRANCH="master"
+```
 
-Keep the harness self-contained: do **not** create a `docs/` or `projects/` folder here, and do
-**not** clone the docs/code repos into this directory. The app checkout stays at `{{CODE_PATH}}` —
-a sibling of this harness, never a child.
+**`CLAUDE.local.md`** — write it **free-form** (there is no `.example` to copy). Author clear
+markdown that records a value for **every remaining token you discovered in Step 1** plus any other
+project fact a skill/agent needs. Cover at least `{{DOCS_REPO}}`, `{{CODE_REPO}}`, `{{CODE_PATH}}`,
+`{{VERSION_FILE}}` (path only + the field/bump method — never the current version number), and
+`{{QUALITY_GATE}}`; give each extra app its own section. Structure it however reads best for this
+project; the only hard requirement is that a value exists for each discovered token. Set anything
+genuinely unknown to `TBD` and tell the human. The user may extend this file later — keep it
+human-editable.
+
+Both files are **gitignored** (real values never land in the reusable template). Keep the harness
+self-contained: do **not** create a `docs/` or `projects/` folder here, and do **not** clone the
+docs/code repos into this directory. The app checkout stays at `$CODE_PATH` — a sibling of this
+harness, never a child.
 
 ## Step 6 — Verify
 
-1. Run `grep -rnE '\{\{[A-Z_]+\}\}' CLAUDE.md .claude/agents .claude/skills` — it must return
-   **nothing** (every token resolved). The one acceptable exception is `harness-init/SKILL.md`
-   itself, which documents the tokens.
-2. Confirm no `docs/` or `projects/` folder was created inside the harness.
-3. Sanity-check the detected `QUALITY_GATE` actually runs (optionally `cd "$CODE_PATH"` and run it).
-4. Report the final mapping and the checks to the human. The harness is now initialized and ready
+1. Confirm `harness.env` sources cleanly and its three scalars are non-empty (portable bash/zsh):
+   ```bash
+   set -a && source .claude/harness.env && set +a
+   printf 'PROJECT_NAME=%s\nTICKET_PREFIX=%s\nDEFAULT_BRANCH=%s\n' \
+     "$PROJECT_NAME" "$TICKET_PREFIX" "$DEFAULT_BRANCH"
+   ```
+   Any empty value means the file is incomplete — fix it.
+2. Confirm `CLAUDE.local.md` exists and resolves **every token discovered in Step 1** that isn't an
+   env scalar — cross-check that no discovered token is missing from it:
+   ```bash
+   for t in $(grep -rhoE '\{\{[A-Z_]+\}\}' .claude/agents .claude/skills | grep -v '{{TOKEN}}' | sort -u); do
+     n=${t#\{\{}; n=${n%\}\}}
+     case "$n" in PROJECT_NAME|TICKET_PREFIX|DEFAULT_BRANCH) continue;; esac
+     grep -q "$n" CLAUDE.local.md || echo "MISSING in CLAUDE.local.md: $n"
+   done
+   ```
+   Then verify the version file path points at a real, readable file (reading it shows the current
+   version live — it must NOT be hard-coded anywhere in the configs).
+3. Confirm both files are ignored by git (`git check-ignore .claude/harness.env CLAUDE.local.md`)
+   and no `docs/` or `projects/` folder was created inside the harness.
+4. Sanity-check the detected `QUALITY_GATE` actually runs (optionally `cd "$CODE_PATH"` and run it).
+5. Report the final mapping and the checks to the human. The harness is now initialized and ready
    to use (`new-issue`, `git-flow`, etc.).
 
 ## Guardrails
 
-- **Ask for project facts; detect code/build facts.** Ticket prefix, repo URLs, and default branch
-  are project facts — get them from the human. `CODE_PATH`, `VERSION_FILE`, and `QUALITY_GATE` are
-  discoverable from the code — detect them and only ask when detection is inconclusive.
+- **Derive the requirement list from the files, not from memory.** Grep the agents/skills for the
+  tokens they actually use; if they change, this skill adapts automatically.
+- **Discover before asking.** Detect code/build facts from the checkout and verify facts via MCP/CLI
+  (Linear team key, GitHub default branch) before falling back to a human question. Ask the human
+  only for what genuinely can't be discovered.
 - **Never store docs or code here.** They live in `{{DOCS_REPO}}` / `{{CODE_REPO}}`; this repo holds
   only AI instructions and rules.
-- This skill is **idempotent-ish**: re-running it re-points the harness at (possibly) new values.
-  If tokens are already resolved, ask the human which values to change rather than blindly editing.
+- **Never hard-code the version number.** Record only the path to the version file; read it live.
+- This skill is **idempotent**: re-running it re-points the harness at (possibly) new values by
+  rewriting `harness.env` and `CLAUDE.local.md`. If either already exists, show its current values
+  and ask the human which to change rather than blindly overwriting.
+- **Never replace `{{TOKEN}}` placeholders in the instruction files.** They are intentional runtime
+  references; the whole point is that only `harness.env` and `CLAUDE.local.md` are project-specific.

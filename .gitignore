@@ -6,3 +6,8 @@ Makefile
 .claude/*
 !.claude/skills
 !.claude/agents
+!.claude/harness.env.example
+# Real project config is per-project and must never be committed to the template.
+.claude/harness.env
+# Local project context — per-project, gitignored; the .example template is committed.
+CLAUDE.local.md
